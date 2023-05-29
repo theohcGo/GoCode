@@ -1,0 +1,2 @@
+# GoCode
+pratice Go
