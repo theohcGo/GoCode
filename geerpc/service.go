@@ -79,6 +79,7 @@ func (s *service) registerMethods() {
 		if mType.Out(0) != reflect.TypeOf((*error)(nil)).Elem() {
 			continue
 		}
+		// log.Println("-------------------log println error : ",reflect.TypeOf((*error)(nil)).Elem())
 		argType, replyType := mType.In(1), mType.In(2)
 		// 是否是可导出字段
 		if !isExportedOrBuiltinType(argType) || !isExportedOrBuiltinType(replyType) {
