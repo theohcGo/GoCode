@@ -1,1 +1,5 @@
-pa:
+package main
+
+func main() {
+	
+}
