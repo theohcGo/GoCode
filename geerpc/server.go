@@ -11,14 +11,17 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 )
 
 // geerpc消息标志值
 const MagicNumber = 0x3bef5c
 
 type Option struct {
-	MagicNumber int
-	CodecType codec.Type // 编解码类型
+	MagicNumber     int
+	CodecType       codec.Type    // 编解码类型
+	ConnectTimeout  time.Duration // 连接超时
+	SendTimeout     time.Duration // 发送超时
 }
 
 // Default Option

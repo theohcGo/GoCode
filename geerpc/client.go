@@ -9,6 +9,9 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
+
+	"golang.org/x/text/cases"
 	//"time"
 )
 
@@ -41,6 +44,12 @@ type Client struct {
 	shutdown   bool
 }
 
+// 附带超时机制的Client
+type ClientResult struct {
+	client *Client
+	err    error
+}
+
 var _ io.Closer = (*Client)(nil)
 
 var ErrClosing  = errors.New("connection is closing")
@@ -58,7 +67,53 @@ func parseOptions(opts ...*Option) (*Option , error) {
 	if opt.CodecType == "" {
 		opt.CodecType = DefaultOption.CodecType
 	}
+	// 设定连接超时时间
+	if opt.ConnectTimeout == 0 {
+		opt.ConnectTimeout = 10
+	}
 	return opt , nil
+}
+
+
+func DialTimeout(network , address string, opts ...*Option) (client *Client,err error) {
+	// 解析option参数
+	opt , err := parseOptions(opts...)
+	if err != nil {
+		return nil , err
+	}
+	// TODO : 增加超时
+	conn , err := net.DialTimeout(network,address,opt.ConnectTimeout)
+	if err != nil {
+		log.Println("rpc client: DialTimeout error : ",err)
+		return nil , err
+	}
+	defer func() {
+		if client == nil {
+			_ = conn.Close()
+		}
+	}()
+	clientCh := make(chan ClientResult)
+	// 开启一个协程创建client
+	// 监听Timeout
+	go func(clientCh chan ClientResult) {
+		select{
+		// 超时处理
+		case <-time.After(opt.ConnectTimeout):
+			log.Println("rpc client : connect to server timeout")
+			conn.Close()
+		// client成功创建
+		case <-clientCh:
+			
+		}
+	}(clientCh)
+
+	select {
+	case <-time.After(opt.ConnectTimeout):
+		return nil,fmt.Errorf("connectTimeout invalid!")
+	case <-clientCh:
+		return <-clientCh , nil
+	}
+	
 }
 
 
@@ -85,7 +140,7 @@ func NewClient(conn net.Conn,opt *Option) (*Client, error) {
 	// 根据CodecType查找Codec的初始化函数
 	f := codec.NewCodecFuncMap[opt.CodecType]
 	if f == nil {
-		err := fmt.Errorf("invalid codec type %s",opt.CodecType)
+		err := fmt.Errorf("invalid codec type %s",opt.CodecT         ype)
 		log.Println("rpc client: codec error:",err)
 		return nil,err
 	}
