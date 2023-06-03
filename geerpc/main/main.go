@@ -60,10 +60,11 @@ func main() {
 	log.SetFlags(0)
 	addr := make(chan string)
 	go startServer(addr)	
-
+	// TODO 1: 添加附带超时机制的Dial
 	client , err := geerpc.Dial("tcp",<-addr)
 	if err != nil {
-		fmt.Println("rpc client geerpc.Dial error")
+		fmt.Println("rpc client geerpc.Dial error",err.Error())
+		panic(0)
 	}
 	defer func() { _ = client.Close() }()
 
