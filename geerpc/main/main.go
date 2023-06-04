@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"geerpc"
 	"log"
@@ -60,7 +61,7 @@ func main() {
 	log.SetFlags(0)
 	addr := make(chan string)
 	go startServer(addr)	
-	// TODO 1: 添加附带超时机制的Dial
+	// 附带超时机制的Dial
 	client , err := geerpc.Dial("tcp",<-addr)
 	if err != nil {
 		fmt.Println("rpc client geerpc.Dial error",err.Error())
@@ -79,8 +80,9 @@ func main() {
 			defer wg.Done()
 			// 测试foo
 			args := &Args{Num1: i,Num2: i*i}
+			ctx, _ := context.WithTimeout(context.Background(), time.Second)
 			var reply int
-			if err := client.Call("Foo.Sum",args,&reply); err != nil {
+			if err := client.Call(ctx,"Foo.Sum",args,&reply); err != nil {
 				log.Fatal("call Foo.Sum error:",err)
 			}
 			log.Printf("%d + %d = %d",args.Num1,args.Num2,reply)
@@ -88,7 +90,7 @@ func main() {
 			s := []int{1,2,3,45}
 			args_tm :=  &ArgsTable{Table: s}
 			var reply_tm int
-			if err := client.Call("TestMap.GetMapSize",args_tm,&reply_tm); err != nil {
+			if err := client.Call(ctx,"TestMap.GetMapSize",args_tm,&reply_tm); err != nil {
 				log.Fatal("call TestMap.GetMapSize error:",err)
 			}
 			log.Printf("len = %d",reply_tm)

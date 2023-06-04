@@ -1,6 +1,7 @@
 package geerpc
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,9 +11,6 @@ import (
 	"net"
 	"sync"
 	"time"
-
-	"golang.org/x/text/cases"
-	//"time"
 )
 
 // Call : 一次RPC请求的封装
@@ -50,6 +48,8 @@ type ClientResult struct {
 	err    error
 }
 
+type NewClientFunc func(net.Conn , *Option) (*Client , error)
+
 var _ io.Closer = (*Client)(nil)
 
 var ErrClosing  = errors.New("connection is closing")
@@ -68,14 +68,12 @@ func parseOptions(opts ...*Option) (*Option , error) {
 		opt.CodecType = DefaultOption.CodecType
 	}
 	// 设定连接超时时间
-	if opt.ConnectTimeout == 0 {
-		opt.ConnectTimeout = 10
-	}
+	opt.ConnectTimeout = DefaultOption.ConnectTimeout
 	return opt , nil
 }
 
 
-func DialTimeout(network , address string, opts ...*Option) (client *Client,err error) {
+func DialTimeout(f NewClientFunc , network , address string, opts ...*Option) (client *Client,err error) {
 	// 解析option参数
 	opt , err := parseOptions(opts...)
 	if err != nil {
@@ -92,46 +90,40 @@ func DialTimeout(network , address string, opts ...*Option) (client *Client,err 
 			_ = conn.Close()
 		}
 	}()
+	// 同步channel
 	clientCh := make(chan ClientResult)
 	// 开启一个协程创建client
-	// 监听Timeout
-	go func(clientCh chan ClientResult) {
-		select{
-		// 超时处理
-		case <-time.After(opt.ConnectTimeout):
-			log.Println("rpc client : connect to server timeout")
-			conn.Close()
-		// client成功创建
-		case <-clientCh:
-			
-		}
-	}(clientCh)
+	go func() {
+		client , err := f(conn,opt)
+		clientCh <- ClientResult{ client: client , err: err }
+	}()
 
+	// 等待超时或client建立成功
 	select {
 	case <-time.After(opt.ConnectTimeout):
 		return nil,fmt.Errorf("connectTimeout invalid!")
-	case <-clientCh:
-		return <-clientCh , nil
-	}
-	
+	case clientRes := <-clientCh:
+		return  clientRes.client , clientRes.err
+	}	
 }
 
 
 func Dial(network , address string, opts ...*Option) (client *Client,err error) {
-	opt , err := parseOptions(opts...)
-	if err != nil {
-		return nil , err
-	}
-	conn , err := net.Dial(network,address)
-	if err != nil {
-		return nil , err
-	}
-	defer func() {
-		if client == nil {
-			_ = conn.Close()
-		}
-	}()
-	return NewClient(conn,opt)
+	// opt , err := parseOptions(opts...)
+	// if err != nil {
+	// 	return nil , err
+	// }
+	// conn , err := net.Dial(network,address)
+	// if err != nil {
+	// 	return nil , err
+	// }
+	// defer func() {
+	// 	if client == nil {
+	// 		_ = conn.Close()
+	// 	}
+	// }()
+	// return NewClient(conn,opt)
+	return DialTimeout(NewClient,network,address)
 }
 
 
@@ -140,7 +132,7 @@ func NewClient(conn net.Conn,opt *Option) (*Client, error) {
 	// 根据CodecType查找Codec的初始化函数
 	f := codec.NewCodecFuncMap[opt.CodecType]
 	if f == nil {
-		err := fmt.Errorf("invalid codec type %s",opt.CodecT         ype)
+		err := fmt.Errorf("invalid codec type %s",opt.CodecType)
 		log.Println("rpc client: codec error:",err)
 		return nil,err
 	}
@@ -300,9 +292,16 @@ func (client *Client) Go(serviceMethod string , args,reply interface{} , done ch
 
 
 // 同步调用接口
-func (client *Client) Call(serviceMethod string, args,reply interface{}) error {
-	call := <-client.Go(serviceMethod,args,reply,make(chan *Call,1)).Done
-	return call.Error
+func (client *Client) Call(ctx context.Context, serviceMethod string, args,reply interface{}) error {
+	call := client.Go(serviceMethod,args,reply,make(chan *Call,1))
+	// 添加超时机制
+	select {
+	case <-ctx.Done():
+		client.removeCall(call.Seq)
+		return fmt.Errorf("rpc client: call failed: " + ctx.Err().Error())
+	case call := <-call.Done:
+		return call.Error
+	}
 }
 
 
