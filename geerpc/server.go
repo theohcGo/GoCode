@@ -83,7 +83,7 @@ func (server *Server) ServeConn(conn io.ReadWriteCloser) {
 		return
 	}
 	// Codec的处理逻辑
-	server.serveCodec(f(conn))
+	server.serveCodec(f(conn),&opt)
 }
 
 // 默认Server开启监听服务
@@ -92,7 +92,7 @@ func Accept(lis net.Listener) { DefaultServer.Accept(lis) }
 // 无效应答
 var invalidRequest = struct{}{}
 
-func (server *Server) serveCodec(cc codec.Codec) {
+func (server *Server) serveCodec(cc codec.Codec, opt *Option) {
 	sendingMux := new(sync.Mutex)
 	wg := new(sync.WaitGroup)
 	for {
@@ -110,7 +110,7 @@ func (server *Server) serveCodec(cc codec.Codec) {
 		// 处理请求
 		// 回复请求
 		wg.Add(1)
-		go server.handleRequest(cc, req, sendingMux, wg)
+		go server.handleRequest(cc, req, sendingMux, wg, opt.HandleTimeout)
 	}
 	wg.Wait()
 	_ = cc.Close()
@@ -195,22 +195,23 @@ func (server *Server) handleRequest(cc codec.Codec, req *request, sendingMux *sy
 			return
 		}
 		server.sendResponse(cc, req.h, req.replyv.Interface(), sendingMux)
-		sendCh <- struct{}{}
+		sendCh <- struct{}{}   
 	}()
+	// 没有超时时，阻塞等待数据发送完成
 	if timeout == 0 {
-		close(callCh)
-		close(sendCh)
+		<-callCh
+		<-sendCh
 		return 
 	}
 	
 	select {
+	// 请求处理并发送数据成功
 	case <-callCh:
-		log.Println("rpc server: ")
-	case <-sendCh:
-
-
+		<-sendCh
+	case <-time.After(timeout):
+		req.h.Error = fmt.Sprintf("rpc server: request hadnle timeout: except within : %s",timeout)
+		server.sendResponse(cc,req.h,invalidRequest,sendingMux)    
 	}
-
 }
 
 // 向server中注册一个service

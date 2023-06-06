@@ -67,8 +67,8 @@ func parseOptions(opts ...*Option) (*Option , error) {
 	if opt.CodecType == "" {
 		opt.CodecType = DefaultOption.CodecType
 	}
-	// 设定连接超时时间
-	opt.ConnectTimeout = DefaultOption.ConnectTimeout
+	// // 设定连接超时时间
+	// opt.ConnectTimeout = DefaultOption.ConnectTimeout
 	return opt , nil
 }
 
@@ -101,7 +101,7 @@ func DialTimeout(f NewClientFunc , network , address string, opts ...*Option) (c
 	// 等待超时或client建立成功
 	select {
 	case <-time.After(opt.ConnectTimeout):
-		return nil,fmt.Errorf("connectTimeout invalid!")
+		return nil,fmt.Errorf("connect timeout invalid!")
 	case clientRes := <-clientCh:
 		return  clientRes.client , clientRes.err
 	}	
