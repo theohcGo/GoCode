@@ -7,7 +7,7 @@ import (
 	"goframe-shop/internal/model"
 	"goframe-shop/internal/service"
 )
-
+// controller 承上启下
 // Rotation 内容管理
 var Rotation = cRotation{}
 

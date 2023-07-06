@@ -30,4 +30,5 @@ type RotationUpdateReq struct {
 	Link       string   `json:"link"    v:"required#跳转链接不能为空"      dc:"跳转链接"`
 	Sort       int      `json:"sort"    dc:"跳转链接"`
 }
+
 type RotationUpdateRes struct{}
